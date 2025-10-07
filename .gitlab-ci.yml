@@ -1,0 +1,157 @@
+# GitLab CI/CD Pipeline Configuration
+# TechNova Inc. - Multi-stage CI/CD Pipeline
+
+stages:
+  - build
+  - test
+  - security
+  - deploy-dev
+  - deploy-staging
+  - deploy-production
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  APP_NAME: "technova-app"
+  REGISTRY_URL: "registry.example.com"
+
+# Build Stage
+build-application:
+  stage: build
+  image: docker:20.10
+  services:
+    - docker:20.10-dind
+  script:
+    - echo "Building application..."
+    - docker build -t $REGISTRY_URL/$APP_NAME:$CI_COMMIT_SHORT_SHA .
+    - docker tag $REGISTRY_URL/$APP_NAME:$CI_COMMIT_SHORT_SHA $REGISTRY_URL/$APP_NAME:latest
+    - docker push $REGISTRY_URL/$APP_NAME:$CI_COMMIT_SHORT_SHA
+    - docker push $REGISTRY_URL/$APP_NAME:latest
+  only:
+    - main
+    - develop
+  tags:
+    - docker
+
+# Test Stage
+unit-tests:
+  stage: test
+  image: node:18-alpine
+  script:
+    - echo "Running unit tests..."
+    - npm install
+    - npm run test:unit
+    - npm run coverage
+  coverage: '/Coverage: \d+\.\d+%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+  only:
+    - main
+    - develop
+    - merge_requests
+
+integration-tests:
+  stage: test
+  image: node:18-alpine
+  script:
+    - echo "Running integration tests..."
+    - npm install
+    - npm run test:integration
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Security Stage
+security-scan:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - echo "Running security scan..."
+    - trivy image --severity HIGH,CRITICAL $REGISTRY_URL/$APP_NAME:$CI_COMMIT_SHORT_SHA
+  allow_failure: true
+  only:
+    - main
+    - develop
+
+code-quality:
+  stage: security
+  image: sonarsource/sonar-scanner-cli:latest
+  script:
+    - echo "Running code quality analysis..."
+    - sonar-scanner -Dsonar.projectKey=$APP_NAME -Dsonar.sources=.
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Deploy Development
+deploy-dev:
+  stage: deploy-dev
+  image: bitnami/kubectl:latest
+  script:
+    - echo "Deploying to development environment..."
+    - kubectl config use-context dev-cluster
+    - kubectl set image deployment/$APP_NAME $APP_NAME=$REGISTRY_URL/$APP_NAME:$CI_COMMIT_SHORT_SHA -n dev
+    - kubectl rollout status deployment/$APP_NAME -n dev
+  environment:
+    name: development
+    url: https://dev.technova.example.com
+  only:
+    - develop
+  tags:
+    - kubernetes
+
+# Deploy Staging
+deploy-staging:
+  stage: deploy-staging
+  image: bitnami/kubectl:latest
+  script:
+    - echo "Deploying to staging environment..."
+    - kubectl config use-context staging-cluster
+    - kubectl set image deployment/$APP_NAME $APP_NAME=$REGISTRY_URL/$APP_NAME:$CI_COMMIT_SHORT_SHA -n staging
+    - kubectl rollout status deployment/$APP_NAME -n staging
+  environment:
+    name: staging
+    url: https://staging.technova.example.com
+  only:
+    - main
+  when: manual
+  tags:
+    - kubernetes
+
+# Deploy Production
+deploy-production:
+  stage: deploy-production
+  image: bitnami/kubectl:latest
+  script:
+    - echo "Deploying to production environment..."
+    - kubectl config use-context prod-cluster
+    - kubectl set image deployment/$APP_NAME $APP_NAME=$REGISTRY_URL/$APP_NAME:$CI_COMMIT_SHORT_SHA -n production
+    - kubectl rollout status deployment/$APP_NAME -n production
+  environment:
+    name: production
+    url: https://app.technova.example.com
+  only:
+    - main
+  when: manual
+  tags:
+    - kubernetes
+
+# Rollback Job
+rollback-production:
+  stage: deploy-production
+  image: bitnami/kubectl:latest
+  script:
+    - echo "Rolling back production deployment..."
+    - kubectl config use-context prod-cluster
+    - kubectl rollout undo deployment/$APP_NAME -n production
+    - kubectl rollout status deployment/$APP_NAME -n production
+  when: manual
+  only:
+    - main
+  tags:
+    - kubernetes
