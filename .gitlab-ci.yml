@@ -1,6 +1,6 @@
 # GitLab CI/CD Pipeline Configuration
 # TechNova Inc. - Multi-stage CI/CD Pipeline
-
+# Minor update: Documentation enhancement
 stages:
   - build
   - test
@@ -8,13 +8,11 @@ stages:
   - deploy-dev
   - deploy-staging
   - deploy-production
-
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
   APP_NAME: "technova-app"
   REGISTRY_URL: "registry.example.com"
-
 # Build Stage
 build-application:
   stage: build
@@ -32,7 +30,6 @@ build-application:
     - develop
   tags:
     - docker
-
 # Test Stage
 unit-tests:
   stage: test
@@ -52,7 +49,6 @@ unit-tests:
     - main
     - develop
     - merge_requests
-
 integration-tests:
   stage: test
   image: node:18-alpine
@@ -64,7 +60,6 @@ integration-tests:
     - main
     - develop
     - merge_requests
-
 # Security Stage
 security-scan:
   stage: security
@@ -76,7 +71,6 @@ security-scan:
   only:
     - main
     - develop
-
 code-quality:
   stage: security
   image: sonarsource/sonar-scanner-cli:latest
@@ -87,7 +81,6 @@ code-quality:
     - main
     - develop
     - merge_requests
-
 # Deploy Development
 deploy-dev:
   stage: deploy-dev
@@ -104,7 +97,6 @@ deploy-dev:
     - develop
   tags:
     - kubernetes
-
 # Deploy Staging
 deploy-staging:
   stage: deploy-staging
@@ -122,7 +114,6 @@ deploy-staging:
   when: manual
   tags:
     - kubernetes
-
 # Deploy Production
 deploy-production:
   stage: deploy-production
@@ -140,7 +131,6 @@ deploy-production:
   when: manual
   tags:
     - kubernetes
-
 # Rollback Job
 rollback-production:
   stage: deploy-production
