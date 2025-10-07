@@ -1,0 +1,197 @@
+{
+  "pipeline": {
+    "name": "TechNova-CICD-Pipeline",
+    "roleArn": "arn:aws:iam::123456789012:role/CodePipelineServiceRole",
+    "artifactStore": {
+      "type": "S3",
+      "location": "technova-pipeline-artifacts"
+    },
+    "stages": [
+      {
+        "name": "Source",
+        "actions": [
+          {
+            "name": "SourceAction",
+            "actionTypeId": {
+              "category": "Source",
+              "owner": "AWS",
+              "provider": "CodeCommit",
+              "version": "1"
+            },
+            "configuration": {
+              "RepositoryName": "technova-app-repo",
+              "BranchName": "main",
+              "PollForSourceChanges": "false"
+            },
+            "outputArtifacts": [
+              {
+                "name": "SourceOutput"
+              }
+            ],
+            "runOrder": 1
+          }
+        ]
+      },
+      {
+        "name": "Build",
+        "actions": [
+          {
+            "name": "BuildAction",
+            "actionTypeId": {
+              "category": "Build",
+              "owner": "AWS",
+              "provider": "CodeBuild",
+              "version": "1"
+            },
+            "configuration": {
+              "ProjectName": "TechNova-Build-Project",
+              "EnvironmentVariables": "[{\"name\":\"APP_NAME\",\"value\":\"technova-app\",\"type\":\"PLAINTEXT\"},{\"name\":\"BUILD_ENV\",\"value\":\"production\",\"type\":\"PLAINTEXT\"}]"
+            },
+            "inputArtifacts": [
+              {
+                "name": "SourceOutput"
+              }
+            ],
+            "outputArtifacts": [
+              {
+                "name": "BuildOutput"
+              }
+            ],
+            "runOrder": 1
+          }
+        ]
+      },
+      {
+        "name": "Test",
+        "actions": [
+          {
+            "name": "UnitTestAction",
+            "actionTypeId": {
+              "category": "Test",
+              "owner": "AWS",
+              "provider": "CodeBuild",
+              "version": "1"
+            },
+            "configuration": {
+              "ProjectName": "TechNova-Test-Project"
+            },
+            "inputArtifacts": [
+              {
+                "name": "BuildOutput"
+              }
+            ],
+            "runOrder": 1
+          },
+          {
+            "name": "SecurityScanAction",
+            "actionTypeId": {
+              "category": "Test",
+              "owner": "AWS",
+              "provider": "CodeBuild",
+              "version": "1"
+            },
+            "configuration": {
+              "ProjectName": "TechNova-Security-Scan"
+            },
+            "inputArtifacts": [
+              {
+                "name": "BuildOutput"
+              }
+            ],
+            "runOrder": 2
+          }
+        ]
+      },
+      {
+        "name": "Deploy-Dev",
+        "actions": [
+          {
+            "name": "DeployToDevAction",
+            "actionTypeId": {
+              "category": "Deploy",
+              "owner": "AWS",
+              "provider": "ECS",
+              "version": "1"
+            },
+            "configuration": {
+              "ClusterName": "technova-dev-cluster",
+              "ServiceName": "technova-app-service",
+              "FileName": "imagedefinitions.json"
+            },
+            "inputArtifacts": [
+              {
+                "name": "BuildOutput"
+              }
+            ],
+            "runOrder": 1
+          }
+        ]
+      },
+      {
+        "name": "Approval",
+        "actions": [
+          {
+            "name": "ManualApproval",
+            "actionTypeId": {
+              "category": "Approval",
+              "owner": "AWS",
+              "provider": "Manual",
+              "version": "1"
+            },
+            "configuration": {
+              "CustomData": "Please review and approve deployment to production",
+              "NotificationArn": "arn:aws:sns:us-east-1:123456789012:technova-pipeline-approvals"
+            },
+            "runOrder": 1
+          }
+        ]
+      },
+      {
+        "name": "Deploy-Production",
+        "actions": [
+          {
+            "name": "DeployToProductionAction",
+            "actionTypeId": {
+              "category": "Deploy",
+              "owner": "AWS",
+              "provider": "ECS",
+              "version": "1"
+            },
+            "configuration": {
+              "ClusterName": "technova-prod-cluster",
+              "ServiceName": "technova-app-service",
+              "FileName": "imagedefinitions.json",
+              "DeploymentTimeout": "15"
+            },
+            "inputArtifacts": [
+              {
+                "name": "BuildOutput"
+              }
+            ],
+            "runOrder": 1
+          }
+        ]
+      }
+    ],
+    "version": 1
+  },
+  "metadata": {
+    "pipelineArn": "arn:aws:codepipeline:us-east-1:123456789012:TechNova-CICD-Pipeline",
+    "created": "2025-10-07T06:30:00.000Z",
+    "updated": "2025-10-07T06:30:00.000Z"
+  },
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "Production"
+    },
+    {
+      "key": "Project",
+      "value": "TechNova-App"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "Infrastructure-Team"
+    }
+  ]
+}
